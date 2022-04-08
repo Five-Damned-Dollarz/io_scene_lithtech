@@ -379,6 +379,9 @@ def import_model(model, options):
 				if (model.version not in [33, 34]) and not (index == 1 and keyframe_index == 0): # this is a dumb hack to preserve the neutral pose in older versions...
 					recursively_apply_transform(model.nodes, 0, armature_object.pose.bones, None)
 				else:
+					'''
+					As far as I can tell, model00p transforms are in world space, so we have to transform them to bone space
+					'''
 					recursively_apply_transform(model.nodes, 0, armature_object.pose.bones, None)
 
 				# For every bone

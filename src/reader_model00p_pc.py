@@ -315,14 +315,17 @@ class PCModel00PackedReader(object):
 		# End
 
 		# Some running totals
-		running_lod_index = 0
 		running_index_list_index = 0
 		for index in range(len(pieces)):
 			piece = pieces[index]
 
 			for lod_index in range(len(piece.lods)):
 				lod = piece.lods[lod_index]
-				info = mesh_info[running_lod_index]
+
+				if lod.piece_count == 0:
+					continue
+
+				info = mesh_info[lod.piece_index_list[0]]
 				running_index_list_index = info.index_list_position
 
 				# Set the material index (for the main lod only!)
@@ -385,7 +388,6 @@ class PCModel00PackedReader(object):
 
 
 				piece.lods[lod_index] = lod
-				running_lod_index += 1
 
 		return pieces
 
@@ -609,21 +611,28 @@ class PCModel00PackedReader(object):
 		shape.cor = self._unpack('f', f)[0]
 		shape.friction = self._unpack('f', f)[0]
 		shape.collision_group = self._unpack('I', f)[0]
-		shape.node_index = self._unpack('I', f)[0]
-		shape.mass = self._unpack('f', f)[0]
-		shape.density = self._unpack('f', f)[0]
-		shape.radius = self._unpack('f', f)[0]
 
-		# Capsule specific
-		# Since sphere doesn't have orientation data, this works?
-		if shape.orientation.w != 1.0:
-			shape.unk_1 = self._unpack('I', f)[0]
-			shape.length_pt1 = self._unpack('f', f)[0]
-			shape.unk_2 = self._unpack('I', f)[0]
-			shape.unk_2 = self._unpack('I', f)[0]
-			shape.length_pt1 = self._unpack('f', f)[0]
-			shape.unk_2 = self._unpack('I', f)[0]
-		# End If
+		# read params
+		type_id = self._unpack('I', f)[0] # FIXME: if Blender upgrades to Python 3.8 just do: `while (type_id := self._unpack('I', f)[0]) <= 7:`
+		while type_id <= 7:
+			if type_id == 0x2:
+				_ = self._unpack('3f', f)
+				_ = self._read_vector(f)
+			elif type_id == 0x3:
+				_ = self._unpack('3f', f)
+			elif type_id == 0x5:
+				_ = self._read_vector(f)
+				_ = self._read_quaternion(f)
+			elif type_id == 0x6:
+				_ = self._unpack('i', f)
+			elif type_id == 0x7:
+				_ = self._unpack('3f', f)
+				_ = self._read_vector(f)
+				_ = self._read_vector(f)
+
+			type_id = self._unpack('I', f)[0]
+
+		f.seek(-4, 1)
 
 		return shape
 
@@ -650,22 +659,22 @@ class PCModel00PackedReader(object):
 		return constraint
 
 	def _read_physics_node_weight(self, f):
-		node_set = PhysicsNodeWeights()
-		node_set.physics = self._unpack('b', f)[0]
-		node_set.velocity_gain = self._unpack('f', f)[0]
-		node_set.hiearchy_gain = self._unpack('f', f)[0]
-		return node_set
+		#node_set = PhysicsNodeWeights()
+		physics = self._unpack('b', f)[0]
+		velocity_gain = self._unpack('f', f)[0]
+		hiearchy_gain = self._unpack('f', f)[0]
+		return [] # node_set
 
 
 	def _read_physics_weights(self, shape_count, f):
-		weight_set = PhysicsWeightSet()
+		#weight_set = PhysicsWeightSet()
 
 		name_offset = self._unpack('I', f)[0]
-		weight_set.name = self._get_string_from_table(name_offset)
+		name = self._get_string_from_table(name_offset)
 
-		weight_set.node_weights = [ self._read_physics_node_weight(f) for _ in range(shape_count) ]
+		node_weights = [ self._read_physics_node_weight(f) for _ in range(shape_count) ]
 
-		return weight_set
+		return [] # weight_set
 
 	def _read_physics(self, f):
 		physics = self.Physics()

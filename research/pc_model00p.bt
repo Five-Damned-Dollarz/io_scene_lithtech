@@ -31,7 +31,7 @@ struct LTVector {
 
 // Divide by 0x7FFF
 struct LTCompressedQuat {
-	ushort x,y,z,w;
+	short x,y,z,w;
 };
 
 struct LTQuat {
@@ -189,6 +189,31 @@ struct PhysicsWeightSet (int Count) {
 	NodeWeight NodeWeights[Count];
 };
 
+// Unknown physics properties for now
+struct Physics0x2 {
+	float mass, density, unk;
+	LTVector dimensions;
+};
+
+struct Physics0x3 {
+	float mass, density, radius;
+};
+
+struct Physics0x5 {
+	LTVector vec;
+	LTQuat quat;
+};
+
+struct Physics0x6 {
+	int unk;
+};
+
+struct Physics0x7 {
+	float mass, density, radius;
+	LTVector vec;
+	LTVector vec_;
+};
+
 struct PhysicsShape {
 	char ShapeIndex;
 	LTVector Offset;
@@ -198,20 +223,33 @@ struct PhysicsShape {
 	float Friction;
 
 	int CollisionGroup; // Maybe CollisionGroup
-	int NodeIndex;
 
-	float Mass;
-	float Density; // This can be scaled per shape!
-	float Radius;
+	while(ReadUInt()<=7)
+	{
+		int NodeIndex;
 
-	// If Orientation isn't 0,0,0,1 then it's not a sphere!
-	// Probably a capsule, haven't ran into anyother shapes yet tho.
-	if (Orientation.w != 1.0) {
-		int Unk1;
-		float LengthPt1;
-		float Unk2[2];
-		float LengthPt2;
-		int Unk3;
+		switch(NodeIndex)
+		{
+			case 0x2:
+				Physics0x2 physics_obb;
+				break;
+
+			case 0x3:
+				Physics0x3 physics_sphere;
+				break;
+
+			case 0x5:
+				Physics0x5 _5;
+				break;
+
+			case 0x6:
+				Physics0x6 _6;
+				break;
+
+			case 0x7:
+				Physics0x7 physics_capsule;
+				break;
+		}
 	}
 };
 
@@ -283,11 +321,12 @@ struct LODGroupHeader {
 };
 
 struct Unk2 {
-	int Unk3; // LOD Related?
+	int Unk3; // LOD Related? if == 1, mesh data is in external .Mesh00p file
 	int PieceCount;
 	int Unk5; // LOD Related?
 	int Unk6;
-	int LODCount;
+
+	// this needs a lot more work for external file refs, etc.
 	if (PieceCount == 0) {
 		LTString MeshFile;
 	}
@@ -319,6 +358,7 @@ struct Meshv34 {
 };
 
 struct MeshHeader (int Version) {
+	int LODCount; // unknown
 	int TextureCount;
 
 	// DataLength / 64 = MeshData
@@ -371,10 +411,13 @@ struct MeshInfo {
 };
 
 struct AfterMesh {
-	int Unk;
-	int ByteDataCount;
-	//short ShortData[ShortDataCount / 2];
-	uchar ByteList[ByteDataCount];
+	int Unk; // vertex format def count
+
+	// struct VertexFormatDef {
+	int ByteDataCount; // size in bytes
+	uchar ByteList[ByteDataCount]; // properties[ByteDataCount/sizeof(VertexProp)];
+	// } vertex_defs[Unk] <optimize=false>;
+
 	// Mesh Info?
 	int MeshInfoCount;
 	MeshInfo Info[MeshInfoCount] <optimize=false>;
@@ -396,7 +439,6 @@ AnimationHeader animHeaders(hdr.NodeCount)[hdr.AnimationHeaderCount] <bgcolor=cL
 
 local uint anim_data_pos=FTell();
 AnimData skip2[hdr.AnimationDataLength];
-//Animation Anim(hdr.NodeCount, animHdr)[hdr.AnimationCount] <optimize=false>;
 
 AnimationInfo animInfo[hdr.AnimationCount] <bgcolor=cLtYellow, optimize=false>;
 local uint anim_info_pos=FTell();
