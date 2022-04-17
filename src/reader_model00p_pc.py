@@ -842,7 +842,7 @@ class PCModel00PackedReader(object):
 						temp_transform = Animation.Keyframe.Transform()
 
 						if section[node_index][0] < -1:
-							if anim_info.binding.is_compressed: # 0 = not compressed, 1 = both compressed?
+							if anim_info.binding.is_compressed: # 0 = not compressed, 1 = both compressed, 2 = only rotation compressed?
 								temp_transform.location = decompress_vec(self._read_short_vector(f))
 							else:
 								temp_transform.location = self._read_vector(f)

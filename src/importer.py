@@ -367,6 +367,10 @@ def import_model(model, options):
 
 					pose_bone.matrix = matrix
 
+					# this is for models using animations that don't fit their skeletal dimensions
+					if (model.version in [33, 34]) and (node.flags & 2):
+						pose_bone.location = Vector((0, 0, 0))
+
 					for _ in range(0, node.child_count):
 						node_index = node_index + 1
 						node_index = recursively_apply_transform(nodes, node_index, pose_bones, pose_bone.matrix)
@@ -376,12 +380,10 @@ def import_model(model, options):
 				Func End
 				'''
 
-				if (model.version not in [33, 34]) and not (index == 1 and keyframe_index == 0): # this is a dumb hack to preserve the neutral pose in older versions...
-					recursively_apply_transform(model.nodes, 0, armature_object.pose.bones, None)
+				if (model.version not in [33, 34]): # this hack gets even worse as we add more supported versions...
+					if not (index == 1 and keyframe_index == 0): # this is a dumb hack to preserve the neutral pose in older versions...
+						recursively_apply_transform(model.nodes, 0, armature_object.pose.bones, None)
 				else:
-					'''
-					As far as I can tell, model00p transforms are in world space, so we have to transform them to bone space
-					'''
 					recursively_apply_transform(model.nodes, 0, armature_object.pose.bones, None)
 
 				# For every bone
@@ -495,13 +497,13 @@ class ImportOperatorABC(bpy.types.Operator, bpy_extras.io_utils.ImportHelper):
 	)
 
 	should_import_animations: BoolProperty(
-		name="Import Animations (Experimental)",
+		name="Import Animations",
 		description="When checked, animations will be imported as actions.",
 		default=False,
 	)
 
 	should_import_vertex_animations: BoolProperty(
-		name="Import Vertex Animations (Experimental)",
+		name="Import Vertex Animations",
 		description="When checked, vertex animations will be imported. (Requires Import Animations.)",
 		default=False,
 	)
