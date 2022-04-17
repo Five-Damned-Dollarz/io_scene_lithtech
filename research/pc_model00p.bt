@@ -255,8 +255,7 @@ struct PhysicsShape {
 
 struct PhysicsConstraintData {
 	int Type;
-	int ShapeIndex;
-	int VertCount;
+	int NodeIndex1, NodeIndex2;
 	//int Shape2Index;
 	if (Type == 4) { // Ragdoll constraint
 		float Data[24];

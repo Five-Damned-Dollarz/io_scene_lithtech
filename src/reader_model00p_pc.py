@@ -163,8 +163,7 @@ class PCModel00PackedReader(object):
 	class PhysicsConstraint(object):
 		def __init__(self):
 			self.type = 0
-			self.shape_index = 0
-			self.unk_1 = 0
+			self.nodes = []
 			self.data = []
 			self.friction = 0
 			self.unk_2 = 0
@@ -640,8 +639,7 @@ class PCModel00PackedReader(object):
 		constraint = self.PhysicsConstraint()
 
 		constraint.type = self._unpack('I', f)[0]
-		constraint.shape_index = self._unpack('I', f)[0]
-		constraint.unk_1 = self._unpack('I', f)[0]
+		constraint.nodes = self._unpack('2I', f)
 
 		data_length = 24
 
@@ -775,7 +773,7 @@ class PCModel00PackedReader(object):
 			#
 			# Animations
 			#
-			unknown = self._unpack('I', f)[0]
+			unknown = self._unpack('f', f)[0]
 
 			# What is it? We'll find out...one day...
 			if unknown != 0:
@@ -837,18 +835,22 @@ class PCModel00PackedReader(object):
 				for anim_info in anim_infos:
 					section = animation_schemas[anim_info.binding.animation_header_index]
 
-					base_transform = [ Animation.Keyframe.Transform() ] * self.node_count
+					base_transform = []
 
 					# read the first frame of every node for the base transforms?
 					for node_index in range(self.node_count):
+						temp_transform = Animation.Keyframe.Transform()
+
 						if section[node_index][0] < -1:
 							if anim_info.binding.is_compressed: # 0 = not compressed, 1 = both compressed?
-								base_transform[node_index].location = decompress_vec(self._read_short_vector(f))
+								temp_transform.location = decompress_vec(self._read_short_vector(f))
 							else:
-								base_transform[node_index].location = self._read_vector(f)
+								temp_transform.location = self._read_vector(f)
 
 						if section[node_index][1] < -1:
-							base_transform[node_index].rotation = decompres_quat(self._read_short_quaternion(f))
+							temp_transform.rotation = decompres_quat(self._read_short_quaternion(f))
+
+						base_transform.append(temp_transform)
 
 					for keyframe_index in range(anim_info.animation.keyframe_count):
 						for node_index in range(self.node_count):
@@ -878,11 +880,7 @@ class PCModel00PackedReader(object):
 						# End For (Node)
 					# End For (Keyframe)
 
-					#print(anim_info.animation.node_keyframe_transforms)
-
 					model.animations.append(anim_info.animation)
-
-				print(animation_position, f.tell())
 
 				f.seek(animation_binding_position)
 
