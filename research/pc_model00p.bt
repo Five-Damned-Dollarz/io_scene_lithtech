@@ -319,16 +319,10 @@ struct LODGroupHeader {
 	LODGroup Groups[LODGroupCount] <optimize=false>;
 };
 
-struct Unk2 {
-	int Unk3; // LOD Related? if == 1, mesh data is in external .Mesh00p file
+struct GeometryHeader {
+	int Unk3; // hasMeshData + 1; if == 1, mesh data is in external .Mesh00p file
 	int PieceCount;
-	int Unk5; // LOD Related?
-	int Unk6;
-
-	// this needs a lot more work for external file refs, etc.
-	if (PieceCount == 0) {
-		LTString MeshFile;
-	}
+	int TotalLodCount;
 };
 
 struct Mesh {
@@ -405,17 +399,17 @@ struct MeshInfo {
 	int TriangleCount;
 	int MaterialIndex;
 	int InfluenceCount;
-	int Unk;
+	int Unk; // VertexFormatDef index?
 	char NodeIndexes[InfluenceCount];
 };
 
 struct AfterMesh {
 	int Unk; // vertex format def count
 
-	// struct VertexFormatDef {
-	int ByteDataCount; // size in bytes
-	uchar ByteList[ByteDataCount]; // properties[ByteDataCount/sizeof(VertexProp)];
-	// } vertex_defs[Unk] <optimize=false>;
+	struct VertexFormatDef {
+		int ByteDataCount; // size in bytes
+		uchar ByteList[ByteDataCount]; // properties[ByteDataCount/sizeof(VertexProp)];
+	} vertex_defs[Unk] <optimize=false>;
 
 	// Mesh Info?
 	int MeshInfoCount;
@@ -503,9 +497,25 @@ PhysicsHeader PhysicsInfo;
 
 
 LODGroupHeader lodGroupHeader;
-Unk2 unk2;
-MeshHeader meshHeader(hdr.Version);
-AfterMesh Debug;
-//FSkip(420); // DeltaForce
-//MeshHeader meshHeader2;
-// LOD info at the bottom, and then mesh data continues per piece
+
+GeometryHeader geometryHeader;
+
+if (geometryHeader.Unk3 > 1)
+{
+	int unk;
+	MeshHeader meshHeader(hdr.Version);
+	AfterMesh Debug;
+
+	int unk;
+	MeshHeader meshHeader(hdr.Version);
+	AfterMesh Debug;
+}
+else
+{
+	struct ExternalMeshRef
+	{
+		int a, b;
+		LTString filename;
+		int d;
+	} externalMesh;
+}

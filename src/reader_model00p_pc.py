@@ -25,11 +25,6 @@ CMP_Relevant = 1
 CMP_Relevant_16 = 2
 CMP_Relevant_Rot16 = 3
 
-# Animation processing values
-ANIM_No_Compression = 0
-ANIM_Compression = 1
-ANIM_Carry_Over = 2
-
 Invalid_Bone = 255
 
 #
@@ -462,75 +457,6 @@ class PCModel00PackedReader(object):
 		node.child_count = self._unpack('I', f)[0]
 		return node
 
-	def _read_uncompressed_transform(self, f):
-		transform = Animation.Keyframe.Transform()
-
-		transform.location = self._read_vector(f)
-		transform.rotation = self._read_quaternion(f)
-
-		return transform
-
-	def _process_compressed_vector(self, compressed_vector):
-		return Vector( (compressed_vector[0] / 16.0, compressed_vector[1] / 16.0, compressed_vector[2] / 16.0) )
-
-	def _process_compressed_quat(self, compressed_quat):
-		return Quaternion( (compressed_quat[3] / 0x7FFF, compressed_quat[0] / 0x7FFF, compressed_quat[1] / 0x7FFF, compressed_quat[2] / 0x7FFF) )
-
-	def _read_compressed_transform(self, compression_type, keyframe_count, f):
-
-		node_transforms = []
-
-		for _ in range(self.node_count):
-			# RLE!
-			key_position_count = self._unpack('I', f)[0]
-
-			compressed_positions = []
-			if compression_type == CMP_Relevant or compression_type == CMP_Relevant_Rot16:
-				compressed_positions = [self._read_vector(f) for _ in range(key_position_count)]
-			elif compression_type == CMP_Relevant_16:
-				compressed_positions = [self._process_compressed_vector(unpack('3h', f)) for _ in range(key_position_count)]
-			# End If
-
-			key_rotation_count = self._unpack('I', f)[0]
-
-			compressed_rotations = []
-			if compression_type == CMP_Relevant:
-				compressed_rotations = [self._read_quaternion(f) for _ in range(key_rotation_count)]
-			elif compression_type == CMP_Relevant_16 or compression_type == CMP_Relevant_Rot16:
-				compressed_rotations = [self._process_compressed_quat(unpack('4h', f)) for _ in range(key_rotation_count)]
-			# End If
-
-			transforms = []
-
-			previous_position = Vector( (0, 0, 0) )
-			previous_rotation = Quaternion( (1, 0, 0, 0) )
-
-			# RLE animations, if it doesn't change in any additional keyframe,
-			# then it we can just use the last known pos/rot!
-			for i in range(keyframe_count):
-				transform = Animation.Keyframe.Transform()
-
-				try:
-					transform.location = compressed_positions[i]
-				except IndexError:
-					transform.location = previous_position
-
-				try:
-					transform.rotation = compressed_rotations[i]
-				except IndexError:
-					transform.rotation = previous_rotation
-
-				previous_position = transform.location
-				previous_rotation = transform.rotation
-
-				transforms.append(transform)
-			# End For
-
-			node_transforms.append(transforms)
-		# End For
-
-		return node_transforms
-
 	def _read_child_model(self, f):
 		child_model = ChildModel()
 		child_model.name = self._read_string(f)
@@ -805,15 +731,6 @@ class PCModel00PackedReader(object):
 				#########################################################################
 				# Animation Pass
 
-				default_locations = []
-				default_rotations = []
-
-				# Note: Defaults should be the node transform values, not Vector(0,0,0) for example.
-
-				for node in model.nodes:
-					default_locations.append(node.location)
-					default_rotations.append(node.rotation)
-
 				def decompress_vec(compressed_vec):
 					for i in range(len(compressed_vec)):
 						if compressed_vec[i] != 0:
@@ -826,8 +743,6 @@ class PCModel00PackedReader(object):
 					for i in range(len(compresed_quat)):
 						if compresed_quat[i] != 0:
 							compresed_quat[i] /= 32768.0
-
-							#
 
 					return Quaternion( compresed_quat )
 

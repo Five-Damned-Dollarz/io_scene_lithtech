@@ -368,6 +368,8 @@ def import_model(model, options):
 					pose_bone.matrix = matrix
 
 					# this is for models using animations that don't fit their skeletal dimensions
+					# may cause a bug in some animations that match the base pose, eg. Alma's "base"
+					# may not be a good place for this; TODO: see if it can be moved to read_model00p_pc.py @ ~835?
 					if (model.version in [33, 34]) and (node.flags & 2):
 						pose_bone.location = Vector((0, 0, 0))
 
