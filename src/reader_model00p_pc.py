@@ -113,6 +113,14 @@ class PCModel00PackedReader(object):
 
 			return self
 
+	class VertexFormatDef(object):
+		def __init__(self):
+			self.size = 0
+			self.data = []
+		def read(self, reader, f):
+			self.size = reader._unpack('I', f)[0]
+			self.data = [ reader._unpack('B', f) for _ in range(self.size) ]
+
 	class AnimInfo(object):
 		def __init__(self):
 			self.binding = None
@@ -248,6 +256,8 @@ class PCModel00PackedReader(object):
 	def _read_mesh_data(self, pieces, f):
 		debug_ftell = f.tell()
 
+		_ = self._unpack('I', f)[0]
+		lod_count = self._unpack('I', f)[0]
 		texture_count = self._unpack('I', f)[0]
 
 		data_length = self._unpack('I', f)[0]
@@ -263,15 +273,8 @@ class PCModel00PackedReader(object):
 		f.seek(data_length, 1)
 		f.seek(index_list_length, 1)
 
-		# Unknown after mesh data
-		# These seem to be the same, so asserts are here for debug.
-		unk_1 = self._unpack('I', f)[0]
-		assert(unk_1 == 1)
-
-		byte_list_count = self._unpack('I', f)[0]
-
-		# Not sure what this is, but it I can safely ignore it for now.
-		unk_byte_list = [ self._unpack('B', f)[0] for _ in range(byte_list_count) ]
+		vertex_format_count = self._unpack('I', f)[0]
+		vertex_format_defs = [ self.VertexFormatDef().read(self, f) for _ in range(vertex_format_count) ]
 
 		# Okay here's the mesh info!
 		mesh_info_count = self._unpack('I', f)[0]
@@ -425,13 +428,19 @@ class PCModel00PackedReader(object):
 		unk_2 = self._unpack('I', f)[0]
 		unk_3 = self._unpack('I', f)[0]
 
-		unk_4 = self._unpack('I', f)[0]
-		unk_5 = self._unpack('I', f)[0]
+		#unk_4 = self._unpack('I', f)[0]
+		#unk_5 = self._unpack('I', f)[0]
 
 		# End unknown values
 
+		if unk_1 < 2:
+			raise Exception("Unsupported external mesh data found.")
+
 		# Read the mesh data, and process the pieces
 		pieces = self._read_mesh_data(pieces, f)
+
+		# Read shadow geometry?
+		#pieces = self._read_mesh_data(pieces, f)
 
 		return pieces
 
