@@ -142,26 +142,30 @@ class PCModel00PackedReader(object):
 			self.weight_sets = []
 
 	class PhysicsShape(object):
+		class HavokShape(object):
+			def __init__(self):
+				self.type_id = 0
+
+				self.mass = -1
+				self.density = -1
+				self.radius = -1
+
+				self.offset = Vector()
+				self.orientation = Quaternion()
+
+			def __repr__(self):
+				return "HavokShape({} {} {}, {} {})".format(self.mass, self.density, self.radius, self.offset, self.orientation)
+
 		def __init__(self):
 			self.index = -1
-			self.offset = -1
-			self.orientation = Vector()
+			self.offset = -1 # Vector()
+			self.orientation = Quaternion()
 			self.cor = -1
 			self.friction = -1
 			self.collision_group = -1
 			self.node_index = -1
-			self.mass = -1
-			self.density = -1
-			self.radius = -1
 
-			# Capsule specific
-			# Since sphere doesn't have orientation data, this works?
-			self.unk_1 = -1
-			self.length_pt1 = -1
-			self.unk_2 = -1
-			self.unk_2 = -1
-			self.length_pt1 = -1
-			self.unk_2 = -1
+			self.havok_shapes = []
 
 	class PhysicsConstraint(object):
 		def __init__(self):
@@ -428,9 +432,6 @@ class PCModel00PackedReader(object):
 		unk_2 = self._unpack('I', f)[0]
 		unk_3 = self._unpack('I', f)[0]
 
-		#unk_4 = self._unpack('I', f)[0]
-		#unk_5 = self._unpack('I', f)[0]
-
 		# End unknown values
 
 		if unk_1 < 2:
@@ -546,27 +547,40 @@ class PCModel00PackedReader(object):
 		shape.friction = self._unpack('f', f)[0]
 		shape.collision_group = self._unpack('I', f)[0]
 
-		# read params
-		type_id = self._unpack('I', f)[0] # FIXME: if Blender upgrades to Python 3.8 just do: `while (type_id := self._unpack('I', f)[0]) <= 7:`
-		while type_id <= 7:
-			if type_id == 0x2:
-				_ = self._unpack('3f', f)
-				_ = self._read_vector(f)
-			elif type_id == 0x3:
-				_ = self._unpack('3f', f)
-			elif type_id == 0x5:
-				_ = self._read_vector(f)
-				_ = self._read_quaternion(f)
-			elif type_id == 0x6:
-				_ = self._unpack('i', f)
-			elif type_id == 0x7:
-				_ = self._unpack('3f', f)
-				_ = self._read_vector(f)
-				_ = self._read_vector(f)
-
+		# read havok shapes, TODO: clean up
+		shape_count = 1
+		havok_shape = None
+		while shape_count > 0:
 			type_id = self._unpack('I', f)[0]
 
-		f.seek(-4, 1)
+			if type_id == 0x1:
+				raise Exception("Unknown physics type_id 0x1 found.")
+			elif type_id == 0x2: # box
+				havok_shape = self.PhysicsShape.HavokShape()
+				shape.havok_shapes.append(havok_shape)
+				havok_shape.mass, havok_shape.density, havok_shape.radius = self._unpack('3f', f)
+				_ = self._read_vector(f)
+			elif type_id == 0x3: # sphere
+				havok_shape = self.PhysicsShape.HavokShape()
+				shape.havok_shapes.append(havok_shape)
+				havok_shape.mass, havok_shape.density, havok_shape.radius = self._unpack('3f', f)
+			elif type_id == 0x4:
+				raise Exception("Unknown physics type_id 0x4 found.")
+			elif type_id == 0x5: # meta shape - shape offset
+				havok_shape.offset = self._read_vector(f)
+				havok_shape.orientation = self._read_quaternion(f)
+			elif type_id == 0x6: # meta shape - shape count
+				shape_count += self._unpack('i', f)[0] * 2 - 1
+			elif type_id == 0x7: # capsule
+				havok_shape = self.PhysicsShape.HavokShape()
+				shape.havok_shapes.append(havok_shape)
+				havok_shape.mass, havok_shape.density, havok_shape.radius = self._unpack('3f', f)
+				_ = self._read_vector(f)
+				_ = self._read_vector(f)
+
+			shape_count -= 1
+
+		#print(shape.havok_shapes)
 
 		return shape
 

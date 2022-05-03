@@ -190,28 +190,29 @@ struct PhysicsWeightSet (int Count) {
 };
 
 // Unknown physics properties for now
-struct Physics0x2 {
+struct Physics0x2 { // box
 	float mass, density, unk;
 	LTVector dimensions;
 };
 
-struct Physics0x3 {
+struct Physics0x3 { // sphere
 	float mass, density, radius;
 };
 
-struct Physics0x5 {
-	LTVector vec;
-	LTQuat quat;
+struct Physics0x5 { // meta subshape offset?
+	LTVector offset;
+	LTQuat rotation;
 };
 
-struct Physics0x6 {
-	int unk;
+struct Physics0x6 { // meta shape count?
+	int count;
 };
 
-struct Physics0x7 {
+struct Physics0x7 { // capsule
 	float mass, density, radius;
-	LTVector vec;
-	LTVector vec_;
+	// TODO: test if x/z have interesting properties
+	LTVector length; // y = length/2
+	LTVector length; // y = -length/2
 };
 
 struct PhysicsShape {
@@ -224,7 +225,15 @@ struct PhysicsShape {
 
 	int CollisionGroup; // Maybe CollisionGroup
 
-	while(ReadUInt()<=7)
+	/*
+	basically there's always at least one shape in each of these.
+	if it's not meta shape 6 there's only 1, no problem.
+	if it is meta shape 6, that's the count of how many shapes there are
+	subsequent shapes are composed of a shape and a meta shape 5 for the offset
+	the final shape has no following offset, and is assumed [0, 0, 0]
+	*/
+	local uint shape_count=1;
+	while(shape_count-->0) //while((temp=ReadUInt())<=7 && temp>0)
 	{
 		int NodeIndex;
 
@@ -239,11 +248,12 @@ struct PhysicsShape {
 				break;
 
 			case 0x5:
-				Physics0x5 _5;
+				Physics0x5 _5; // meta shape; sub-shape relative position/rotation?
 				break;
 
 			case 0x6:
-				Physics0x6 _6;
+				Physics0x6 _6; // meta shape; real shape count?
+				shape_count+=_6.count*2-1;
 				break;
 
 			case 0x7:
