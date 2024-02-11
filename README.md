@@ -21,6 +21,7 @@ ABCv13 | Rigid and Skeletal | Limited
 LTA | No | Rigid and Skeletal
 LTB (PS2) | Rigid and Skeletal | No
 LTB (PC) | Rigid and Skeletal | No
+Model00p | Rigid and Skeletal | Use LTA
 
 The ABC file format description can be found on our wiki [here](https://github.com/cmbasnett/io_scene_abc/wiki/ABC).
 
@@ -39,5 +40,5 @@ Additional format information can be found in [here](https://github.com/haekb/io
 * [**Colin Basnett**](https://github.com/cmbasnett) - Original Creator / Programming
 * [**ReindeerFloatilla**](https://github.com/ReindeerFloatilla) - Research
 * [**Haekb**](https://github.com/haekb) - Current Maintainer / Programming / Research 
-* [**Amphos**](https://github.com/Five-Damned-Dollarz) - Programming
+* [**Amphos**](https://github.com/Five-Damned-Dollarz) - Programming / Research
 * [**Psycrow**](https://github.com/Psycrow101) - Programming
