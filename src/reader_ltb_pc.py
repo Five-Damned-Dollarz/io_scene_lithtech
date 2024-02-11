@@ -386,13 +386,15 @@ class PCLTBModelReader(object):
         node.child_count = unpack('I', f)[0]
         return node
 
-    def _read_uncompressed_transform(self, f):
-        transform = Animation.Keyframe.Transform()
+    def _read_uncompressed_transform(self, keyframe_count, f):
+        node_transforms = [Animation.Keyframe.Transform() for _ in range(keyframe_count)]
 
-        transform.location = self._read_vector(f)
-        transform.rotation = self._read_quaternion(f)
+        for t in node_transforms:
+            t.location = self._read_vector(f)
+        for t in node_transforms:
+            t.rotation = self._read_quaternion(f)
 
-        return transform
+        return node_transforms
 
     def _process_compressed_vector(self, compressed_vector):
         return Vector( (compressed_vector[0] / 16.0, compressed_vector[1] / 16.0, compressed_vector[2] / 16.0) )
@@ -483,8 +485,7 @@ class PCLTBModelReader(object):
                 # We don't support vertex animations yet, so alert if we accidentally load some!
                 assert(animation.is_vertex_animation == 0)
 
-                animation.node_keyframe_transforms.append(
-                    [self._read_uncompressed_transform(f) for _ in range(animation.keyframe_count)])
+                animation.node_keyframe_transforms.append(self._read_uncompressed_transform(animation.keyframe_count, f))
             # End For
         else:
             animation.node_keyframe_transforms = self._read_compressed_transform(animation.compression_type, animation.keyframe_count, f)

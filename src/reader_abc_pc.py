@@ -9,6 +9,7 @@ class ABCModelReader(object):
         self._version = 0
         self._node_count = 0
         self._lod_count = 0
+        self._lod_dist_count = 0
 
     def _read_matrix(self, f):
         data = unpack('16f', f)
@@ -34,8 +35,15 @@ class ABCModelReader(object):
 
     def _read_vertex(self, f):
         vertex = Vertex()
-        weight_count = unpack('H', f)[0]
-        vertex.sublod_vertex_index = unpack('H', f)[0]
+
+        if self._version != 108:
+            weight_count = unpack('H', f)[0]
+            vertex.sublod_vertex_index = unpack('H', f)[0]
+        elif self._version == 108:
+            weight_count = unpack('B', f)[0]
+            vertex.sublod_vertex_index = unpack('B', f)[0]
+            f.seek(2, 1)
+
         vertex.weights = [self._read_weight(f) for _ in range(weight_count)]
         vertex.location = self._read_vector(f)
         vertex.normal = self._read_vector(f)
@@ -63,6 +71,10 @@ class ABCModelReader(object):
     def _read_piece(self, f):
         piece = Piece()
         piece.material_index = unpack('H', f)[0]
+
+        if self._version == 108:
+            f.seek(6, 1)
+
         piece.specular_power = unpack('f', f)[0]
         piece.specular_scale = unpack('f', f)[0]
         if self._version > 9:
@@ -77,8 +89,13 @@ class ABCModelReader(object):
         node.name = self._read_string(f)
         node.index = unpack('H', f)[0]
         node.flags = unpack('b', f)[0]
+
+        if self._version == 108:
+            f.seek(4, 1)
+
         node.bind_matrix = self._read_matrix(f)
         node.inverse_bind_matrix = node.bind_matrix.inverted()
+
         node.child_count = unpack('I', f)[0]
         return node
 
@@ -106,6 +123,14 @@ class ABCModelReader(object):
         keyframe.string = self._read_string(f)
         return keyframe
 
+    def _read_anim_transform(self, f):
+        transform = self._read_transform(f)
+
+        if self._version == 108:
+            f.seek(8, 1)
+
+        return transform
+
     def _read_animation(self, f):
         animation = Animation()
         animation.extents = self._read_vector(f)
@@ -118,11 +143,11 @@ class ABCModelReader(object):
         for _ in range(self._node_count):
 
             # Skip past -1
-            if self._version == 13:
+            if self._version >= 13:
                 f.seek(4, 1)
 
             animation.node_keyframe_transforms.append(
-                [self._read_transform(f) for _ in range(animation.keyframe_count)])
+                [self._read_anim_transform(f) for _ in range(animation.keyframe_count)])
         return animation
 
     def _read_socket(self, f):
@@ -158,33 +183,49 @@ class ABCModelReader(object):
                 next_section_offset = unpack('i', f)[0]
                 if section_name == 'Header':
                     self._version = unpack('I', f)[0]
-                    if self._version not in [9, 10, 11, 12, 13]:
+                    if self._version not in [9, 10, 11, 12, 13, 108]:
                         raise Exception('Unsupported file version ({}).'.format(self._version))
                     model.version = self._version
                     f.seek(8, 1)
                     self._node_count = unpack('I', f)[0]
                     f.seek(20, 1)
                     self._lod_count = unpack('I', f)[0]
+                    self._lod_dist_count = self._lod_count
                     f.seek(4, 1)
                     self._weight_set_count = unpack('I', f)[0]
                     f.seek(8, 1)
 
                     # Unknown new value
                     if self._version >= 13:
-                        f.seek(4,1)
+                        f.seek(4, 1)
+
+                    if self._version == 108:
+                        f.seek(8, 1)
 
                     model.command_string = self._read_string(f)
                     model.internal_radius = unpack('f', f)[0]
-                    f.seek(64, 1)
-                    model.lod_distances = [unpack('f', f)[0] for _ in range(self._lod_count)]
+
+                    if self._version == 108:
+                        self._lod_dist_count = unpack('I', f)[0]
+                    else:
+                        f.seek(4, 1)
+
+                    f.seek(60, 1)
+                    model.lod_distances = [unpack('f', f)[0] for _ in range(self._lod_dist_count)]
                 elif section_name == 'Pieces':
                     weight_count, pieces_count = unpack('2I', f)
                     model.pieces = [self._read_piece(f) for _ in range(pieces_count)]
                 elif section_name == 'Nodes':
+                    if self._version == 108:
+                        weight_set_count = unpack('I', f)[0]
+                        model.weight_sets = [self._read_weight_set(f) for _ in range(weight_set_count)]
+
                     model.nodes = [self._read_node(f) for _ in range(self._node_count)]
                     build_undirected_tree(model.nodes)
-                    weight_set_count = unpack('I', f)[0]
-                    model.weight_sets = [self._read_weight_set(f) for _ in range(weight_set_count)]
+
+                    if self._version != 108:
+                        weight_set_count = unpack('I', f)[0]
+                        model.weight_sets = [self._read_weight_set(f) for _ in range(weight_set_count)]
                 elif section_name == 'ChildModels':
                     child_model_count = unpack('H', f)[0]
                     model.child_models = [self._read_child_model(f) for _ in range(child_model_count)]
@@ -197,4 +238,7 @@ class ABCModelReader(object):
                 elif section_name == 'AnimBindings':
                     anim_binding_count = unpack('I', f)[0]
                     model.anim_bindings = [self._read_anim_binding(f) for _ in range(anim_binding_count)]
+                elif section_name == 'HitGroups' and self._version == 108:
+                    hitgroups_count = unpack('I', f)[0]
+                    #model.hitgroups = [self._read_hitgroups(f) for _ in range(hitgroups_count)]
         return model
