@@ -108,7 +108,7 @@ class PCModel00PackedReader(object):
 					continue
 
 				if prop.location == VertexPropertyLocation.Position:
-					self.vertex = Vector([ unpacked[0], unpacked[2], unpacked[1] ])
+					self.vertex = Vector([ unpacked[0], unpacked[1], unpacked[2]])
 				elif prop.location == VertexPropertyLocation.BlendWeight:
 					self.weight_info = tuple(reversed(unpacked[0:3])) #print("Unhandled vertex blend weight parameter")
 				elif prop.location == VertexPropertyLocation.BlendIndices:
