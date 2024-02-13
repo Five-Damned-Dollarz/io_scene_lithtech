@@ -2,6 +2,7 @@ import os
 from .abc import *
 from .io import unpack
 from mathutils import Vector, Matrix, Quaternion
+from enum import IntEnum
 
 # LTB Mesh Types
 LTB_Type_Rigid_Mesh = 4
@@ -27,6 +28,24 @@ CMP_Relevant_Rot16 = 3
 
 Invalid_Bone = 255
 
+class VertexPropertyFormat(IntEnum):
+	Float_x2=1 # Vector2f
+	Float_x3=2 # Vector3f
+	Float_x4=3 # Vector4f
+	Byte_x4=4 # Int_x1?
+	SkeletalIndex=5 # Float or Int, depending on shader defs
+	Exit=17
+
+class VertexPropertyLocation(IntEnum):
+	Position=0
+	BlendWeight=1
+	BlendIndices=2
+	Normal=3
+	TexCoords=5
+	Tangent=6
+	Binormal=7
+	Colour=10
+
 #
 # Supports Model00p v33 (FEAR)
 #
@@ -48,40 +67,66 @@ class PCModel00PackedReader(object):
 	# Helper class for reading in mesh data
 	# TODO: Need to clean up and move into a model class whenever I get to that.
 	class MeshData(object):
-		def __init__(self, data_size):
+		def __init__(self):
 			self.vertex = Vector()
 			self.normal = Vector()
-			self.uvs = Vector()
-			self.unk_1 = Vector()
-			self.unk_2 = Vector()
+			self.uvs = Vector() # [] when adding in multiple UV maps
+			self.tangent = Vector()
+			self.binormal = Vector()
 			self.weight_info = []
 			self.node_indexes = []
 			self.colour = []
 
-			# FEAR uses 64, which is mesh data WITHOUT colour info
-			# Condemned uses 68, which includes colour info.
-			self.data_size = data_size
+		def read(self, reader, f, vertex_format):
 
-			if data_size not in [64, 68]:
-				print("WARNING: Non-standard MeshData size. Size is %d" % data_size)
+			tmp_pos = f.tell()
 
-		def read(self, reader, f):
-			self.vertex = reader._read_vector(f)
-			self.normal = reader._read_vector(f)
-			self.uvs.xy = reader._unpack('2f', f)
-			self.unk_1 = reader._read_vector(f)
-			self.unk_2 = reader._read_vector(f)
+			for prop in vertex_format.properties:
 
-			if self.data_size == 68:
-				self.colour = reader._unpack('4B', f)
+				pack_str = ""
+				if prop.format == VertexPropertyFormat.Float_x2:
+					pack_str = "2f"
+				elif prop.format == VertexPropertyFormat.Float_x3:
+					pack_str = "3f"
+				elif prop.format == VertexPropertyFormat.Float_x4:
+					pack_str = "4f"
+				elif prop.format == VertexPropertyFormat.Byte_x4:
+					pack_str = "4B"
+				elif prop.format == VertexPropertyFormat.SkeletalIndex:
+					pack_str = "4b" # 4 bytes
+				elif prop.format == VertexPropertyFormat.Exit:
+					raise ValueError("Vertex property Exit found")
+					continue # this /should/ never activate since we chop the final entry off when reading the descriptors
+				else:
+					raise ValueError("Invalid vertex property format")
 
-			self.weight_info = reader._unpack('3B', f)
-			padding = reader._unpack('B', f)[0]
-			self.node_indexes = reader._unpack('3B', f)
-			padding = reader._unpack('B', f)[0]
+				#pack_size = struct.calcsize(pack_str)
+				unpacked = reader._unpack(pack_str, f)
 
-			# Reverse the weight info, I'm not sure why it's flipped...
-			self.weight_info = tuple(reversed(self.weight_info))
+				if prop.id > 0: # handle this properly!
+					print("Unhandled vertex property, id > 0")
+					continue
+
+				if prop.location == VertexPropertyLocation.Position:
+					self.vertex = Vector([ unpacked[0], unpacked[2], unpacked[1] ])
+				elif prop.location == VertexPropertyLocation.BlendWeight:
+					self.weight_info = tuple(reversed(unpacked[0:3])) #print("Unhandled vertex blend weight parameter")
+				elif prop.location == VertexPropertyLocation.BlendIndices:
+					self.node_indexes = unpacked[0:3] #print("Unhandled vertex blend indices parameter")
+				elif prop.location == VertexPropertyLocation.Normal:
+					self.normal = Vector([ unpacked[0], unpacked[2], unpacked[1] ])
+				elif prop.location == VertexPropertyLocation.TexCoords:
+					self.uvs = Vector([ unpacked[0], 1.0 - unpacked[1] ])
+				elif prop.location == VertexPropertyLocation.Tangent:
+					self.tangent = Vector([ unpacked[0], unpacked[2], unpacked[1] ])
+				elif prop.location == VertexPropertyLocation.Binormal:
+					self.binormal = Vector([ unpacked[0], unpacked[2], unpacked[1] ])
+				elif prop.location == VertexPropertyLocation.Colour:
+					self.colour = Vector([ unpacked[0] / 255, unpacked[1] / 255, unpacked[2] / 255, unpacked[3] / 255 ])
+				else:
+					raise ValueError("Unknown vertex property location")
+
+			#print(f.tell()-tmp_pos, self.vertex, self.normal)
 
 			return self
 
@@ -96,7 +141,7 @@ class PCModel00PackedReader(object):
 			self.triangle_count = 0
 			self.material_index = 0
 			self.influence_count = 0
-			self.unk_4 = 0
+			self.vertex_format_index = 0
 			self.influence_node_indexes = []
 
 		def read(self, reader, f):
@@ -108,18 +153,40 @@ class PCModel00PackedReader(object):
 			self.triangle_count = reader._unpack('I', f)[0]
 			self.material_index = reader._unpack('I', f)[0]
 			self.influence_count = reader._unpack('I', f)[0]
-			self.unk_4 = reader._unpack('I', f)[0]
+			self.vertex_format_index = reader._unpack('I', f)[0]
 			self.influence_node_indexes = [ reader._unpack('b', f)[0] for _ in range(self.influence_count) ]
+
+			return self
+
+	class VertexFormatProperty(object):
+		size = 8
+
+		def __init__(self):
+			self.cont_flag = 0 # -1 = end
+			# pad byte
+			self.offset = 0
+			self.format=-1
+			self.location=-1
+			self.id=0
+
+		def read(self, reader, f):
+			self.cont_flag = reader._unpack('bb', f)[0] # read 2 bytes, assume 2nd is pad unless proven otherwise
+			self.offset, self.format = reader._unpack('2H', f)
+			self.location, self.id = reader._unpack('2B', f)
 
 			return self
 
 	class VertexFormatDef(object):
 		def __init__(self):
 			self.size = 0
-			self.data = []
+			self.properties = []
+
 		def read(self, reader, f):
-			self.size = reader._unpack('I', f)[0]
-			self.data = [ reader._unpack('B', f) for _ in range(self.size) ]
+			self.size = int(reader._unpack('I', f)[0] / PCModel00PackedReader.VertexFormatProperty.size)
+			self.properties = [ PCModel00PackedReader.VertexFormatProperty().read(reader, f) for _ in range(self.size) ]
+			self.properties = self.properties[0:len(self.properties) - 1]
+
+			return self
 
 	class AnimInfo(object):
 		def __init__(self):
@@ -278,7 +345,7 @@ class PCModel00PackedReader(object):
 		f.seek(index_list_length, 1)
 
 		vertex_format_count = self._unpack('I', f)[0]
-		vertex_format_defs = [ self.VertexFormatDef().read(self, f) for _ in range(vertex_format_count) ]
+		vertex_formats = [ self.VertexFormatDef().read(self, f) for _ in range(vertex_format_count) ]
 
 		# Okay here's the mesh info!
 		mesh_info_count = self._unpack('I', f)[0]
@@ -299,8 +366,10 @@ class PCModel00PackedReader(object):
 
 			length = info.mesh_data_count
 			for _ in range( length ):
-				data = self.MeshData(info.mesh_data_size)
-				mesh_data_list.append( data.read(self, f) )
+				data = self.MeshData()
+				mesh_data_list.append( data.read(self, f, vertex_formats[info.vertex_format_index]) )
+
+		assert(f.tell() == (mesh_data_position + data_length))
 
 		# END NEW
 
@@ -309,6 +378,8 @@ class PCModel00PackedReader(object):
 		index_list = [ self._unpack('H', f)[0] for _ in range( int(index_list_length / 2) ) ]
 
 		debug_ftell = f.tell()
+
+		assert(f.tell() == mesh_data_position + data_length + index_list_length)
 
 		# Annnnd hope back
 		f.seek(mesh_info_position, 0)
@@ -832,6 +903,23 @@ class PCModel00PackedReader(object):
 			#
 			socket_count = self._unpack('I', f)[0]
 			model.sockets = [self._read_socket(f) for _ in range(socket_count)]
+
+			'''
+			District 187 exclusive data:
+			'''
+			__DISTRICT_187_TEST = False
+			if __DISTRICT_187_TEST:
+				def _read_d187_unknown_1(f):
+					count = self._unpack('I', f)[0]
+					return [self._unpack('5I', f) for _ in range(count)]
+
+				_ = [_read_d187_unknown_1(f) for _ in range(animation_count)]
+
+				d187_count = self._unpack('I', f)[0]
+				_ = [self._unpack('4I', f) for _ in range(d187_count)]
+			'''
+			exclusive end
+			'''
 
 			#
 			# Child Models
