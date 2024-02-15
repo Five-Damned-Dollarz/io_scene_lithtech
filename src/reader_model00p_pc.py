@@ -4,6 +4,8 @@ from .io import unpack
 from mathutils import Vector, Matrix, Quaternion
 from enum import IntEnum
 
+DISTRICT_187_TEST = True
+
 # LTB Mesh Types
 LTB_Type_Rigid_Mesh = 4
 LTB_Type_Skeletal_Mesh = 5
@@ -100,7 +102,6 @@ class PCModel00PackedReader(object):
 				else:
 					raise ValueError("Invalid vertex property format")
 
-				#pack_size = struct.calcsize(pack_str)
 				unpacked = reader._unpack(pack_str, f)
 
 				if prop.id > 0: # handle this properly!
@@ -110,9 +111,9 @@ class PCModel00PackedReader(object):
 				if prop.location == VertexPropertyLocation.Position:
 					self.vertex = Vector([ unpacked[0], unpacked[1], unpacked[2]])
 				elif prop.location == VertexPropertyLocation.BlendWeight:
-					self.weight_info = tuple(reversed(unpacked[0:3])) #print("Unhandled vertex blend weight parameter")
+					self.weight_info = tuple(reversed(unpacked[0:3]))
 				elif prop.location == VertexPropertyLocation.BlendIndices:
-					self.node_indexes = unpacked[0:3] #print("Unhandled vertex blend indices parameter")
+					self.node_indexes = unpacked[0:3]
 				elif prop.location == VertexPropertyLocation.Normal:
 					self.normal = Vector([ unpacked[0], unpacked[2], unpacked[1] ])
 				elif prop.location == VertexPropertyLocation.TexCoords:
@@ -125,8 +126,6 @@ class PCModel00PackedReader(object):
 					self.colour = Vector([ unpacked[0] / 255, unpacked[1] / 255, unpacked[2] / 255, unpacked[3] / 255 ])
 				else:
 					raise ValueError("Unknown vertex property location")
-
-			#print(f.tell()-tmp_pos, self.vertex, self.normal)
 
 			return self
 
@@ -505,7 +504,7 @@ class PCModel00PackedReader(object):
 
 		# End unknown values
 
-		if unk_1 < 2:
+		if unk_1 < 2 and DISTRICT_187_TEST == False:
 			raise Exception("Unsupported external mesh data found.")
 
 		# Read the mesh data, and process the pieces
@@ -907,8 +906,7 @@ class PCModel00PackedReader(object):
 			'''
 			District 187 exclusive data:
 			'''
-			__DISTRICT_187_TEST = False
-			if __DISTRICT_187_TEST:
+			if DISTRICT_187_TEST:
 				def _read_d187_unknown_1(f):
 					count = self._unpack('I', f)[0]
 					return [self._unpack('5I', f) for _ in range(count)]
