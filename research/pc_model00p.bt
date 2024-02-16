@@ -11,6 +11,8 @@
 //   History: 
 //------------------------------------------------
 
+#define FORCE_DISTRICT_187 false
+
 struct LTString {
 	ushort Length;
 	char Value[Length];
@@ -291,7 +293,7 @@ struct PhysicsHeader {
 
 struct AnimationWeightSet (int NodeCount) {
 	// Actually NameOffset
-	int NameOffset;
+	int NameOffset <read=ReadStringIndex>;
 	int Unk; // ?
 	float Weights[NodeCount];
 };
@@ -319,7 +321,7 @@ struct SubLODInfo {
 };
 
 struct LODGroup {
-	int NameOffset;
+	int NameOffset <read=ReadStringIndex>;
 	int LODCount;
 	LODInfo LODInfoData[LODCount] <optimize=false>;
 };
@@ -337,27 +339,35 @@ struct GeometryHeader {
 
 struct Mesh {
 	LTVector Vertex;
-	LTVector Normals;
+	LTVector Normal;
 	LTUV UVs;
-	LTVector Unk1;
-	LTVector Unk4;
-	uchar WeightInfo[3];
-	uchar Padding;
-	uchar NodeIndexes[3];
-	uchar Padding2;
+	LTVector Tangent;
+	LTVector Binormal;
+	uchar BlendWeights[4];
+	uchar BlendIndexes[4];
 };
 
 struct Meshv34 {
 	LTVector Vertex;
-	LTVector Normals;
+	LTVector Normal;
 	LTUV UVs;
-	LTVector Unk1;
-	LTVector Unk4;
+	LTVector Tangent;
+	LTVector Binormal;
 	uchar Colour[4];
-	uchar WeightInfo[3];
-	uchar Padding;
-	uchar NodeIndexes[3];
-	uchar Padding2;
+	uchar BlendWeights[4];
+	uchar BlendIndexes[4];
+};
+
+struct MeshvD187
+{
+	LTVector Vertex;
+	LTVector Normal;
+	LTUV UV1;
+	LTUV UV2;
+	LTVector Tangent;
+	LTVector Binormal;
+	uchar BlendWeights[4];
+	uchar BlendIndexes[4];
 };
 
 struct MeshHeader (int Version) {
@@ -369,7 +379,10 @@ struct MeshHeader (int Version) {
 	// DataCount / 2 = tri-fs count
 	int IndexListLength;
 
-	if (Version == 34) {
+	if (Version == 187) {
+		MeshvD187 MeshData[DataLength/72];
+	}
+	else if (Version == 34) {
 		Meshv34 MeshData[DataLength/68];
 	} else {
 		Mesh MeshData[DataLength/64];
@@ -385,7 +398,7 @@ struct ContainsGeometry {
 
 struct Socket {
 	int NodeIndex;
-	int NameOffset;
+	int NameOffset <read=ReadStringIndex>;
 	LTQuat Rotation;
 	LTVector Position;
 	float Scale;
@@ -413,13 +426,40 @@ struct MeshInfo {
 	char NodeIndexes[InfluenceCount];
 };
 
-struct AfterMesh {
-	int Unk; // vertex format def count
+struct VertexDefs {
+	int def_count; // vertex format def count
 
 	struct VertexFormatDef {
 		int ByteDataCount; // size in bytes
-		uchar ByteList[ByteDataCount]; // properties[ByteDataCount/sizeof(VertexProp)];
-	} vertex_defs[Unk] <optimize=false>;
+
+		struct VertexProp
+		{
+			byte cont_flag; // -1 = end
+			byte pad;
+			ushort offset;
+			enum <short>
+			{
+				Vec2f=1,
+				Vec3f=2,
+				Int=4,
+			} type;
+			enum <ubyte>
+			{
+				Position=0,
+				BlendWeight=1,
+				BlendIndex=2,
+				Normal=3,
+				Uv=5,
+				Tangent=6,
+				Binormal=7,
+			} shader_role;
+			ubyte role_index;
+		};
+
+		Assert(ByteDataCount % sizeof(VertexProp) == 0);
+
+		VertexProp vertex_props[ByteDataCount/sizeof(VertexProp)];
+	} vertex_defs[def_count] <optimize=false>;
 
 	// Mesh Info?
 	int MeshInfoCount;
@@ -493,6 +533,30 @@ AnimationWeightSetHeader animWeightSetHeader(hdr.NodeCount);
 
 SocketHeader socketHeader;
 
+// animation related for sure
+struct D187Unknown_1
+{
+	uint frameCount; // same as animInfo[i].frameCount
+	struct {
+		int a;
+		uint timeUnk; // never matches animInfo[i].Keyframes
+		uint nodeName <read=ReadStringIndex>;
+		int d, e;
+	} buf[count];
+};
+
+D187Unknown_1 d187_unk_1[hdr.AnimationCount] <optimize=false>;
+
+struct AnimationTransitions
+{
+	uint count; // hdr.AnimationCount ^ 2
+	struct {
+		int animIdIn, animIdOut, unk, time;
+	} animTransition[count];
+};
+
+AnimationTransitions animTransitions;
+
 if (hdr.Version == 34) {
 	ChildModelHeaderv34 childModels;
 } else {
@@ -510,15 +574,29 @@ LODGroupHeader lodGroupHeader;
 
 GeometryHeader geometryHeader;
 
-if (geometryHeader.Unk3 > 1)
+local int version = hdr.Version;
+#ifdef FORCE_DISTRICT_187
+	version = 187;
+#endif
+
+if (geometryHeader.Unk3 > 1 || version == 187)
 {
+	/*
+	this is all hacked up
+	what should happen is we read the mesh header,
+	then the data length, then the index list to
+	memory. Then we read the vertex defs section
+	before parsing the mesh data block correctly
+	using the mesh info structs to find each part
+	*/
+
 	int unk;
-	MeshHeader meshHeader(hdr.Version);
-	AfterMesh Debug;
+	MeshHeader meshHeader(version);
+	VertexDefs vertDefs;
 
 	int unk;
 	MeshHeader meshHeader(hdr.Version);
-	AfterMesh Debug;
+	VertexDefs vertDefs;
 }
 else
 {

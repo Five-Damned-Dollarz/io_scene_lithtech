@@ -911,10 +911,13 @@ class PCModel00PackedReader(object):
 					count = self._unpack('I', f)[0]
 					return [self._unpack('5I', f) for _ in range(count)]
 
-				_ = [_read_d187_unknown_1(f) for _ in range(animation_count)]
+				anim_unk = [_read_d187_unknown_1(f) for _ in range(animation_count)]
 
-				d187_count = self._unpack('I', f)[0]
-				_ = [self._unpack('4I', f) for _ in range(d187_count)]
+				def _read_animation_transition(f):
+					return self._unpack('4I', f)
+
+				anim_transition_count = self._unpack('I', f)[0]
+				anim_transitions = [_read_animation_transition(f) for _ in range(anim_transition_count)]
 			'''
 			exclusive end
 			'''
