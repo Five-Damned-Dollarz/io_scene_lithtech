@@ -4,7 +4,7 @@ from .io import unpack
 from mathutils import Vector, Matrix, Quaternion
 from enum import IntEnum
 
-DISTRICT_187_TEST = True
+DISTRICT_187_TEST = False
 
 # LTB Mesh Types
 LTB_Type_Rigid_Mesh = 4

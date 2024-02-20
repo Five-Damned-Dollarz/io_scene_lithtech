@@ -542,10 +542,8 @@ struct D187Unknown_1
 		uint timeUnk; // never matches animInfo[i].Keyframes
 		uint nodeName <read=ReadStringIndex>;
 		int d, e;
-	} buf[count];
+	} buf[frameCount];
 };
-
-D187Unknown_1 d187_unk_1[hdr.AnimationCount] <optimize=false>;
 
 struct AnimationTransitions
 {
@@ -555,7 +553,10 @@ struct AnimationTransitions
 	} animTransition[count];
 };
 
-AnimationTransitions animTransitions;
+#ifdef FORCE_DISTRICT_187
+	D187Unknown_1 d187_unk_1[hdr.AnimationCount] <optimize=false>;
+	AnimationTransitions animTransitions;
+#endif
 
 if (hdr.Version == 34) {
 	ChildModelHeaderv34 childModels;
@@ -574,9 +575,10 @@ LODGroupHeader lodGroupHeader;
 
 GeometryHeader geometryHeader;
 
-local int version = hdr.Version;
 #ifdef FORCE_DISTRICT_187
-	version = 187;
+	local int version = 187;
+#else
+	local int version = hdr.Version;
 #endif
 
 if (geometryHeader.Unk3 > 1 || version == 187)
@@ -588,6 +590,15 @@ if (geometryHeader.Unk3 > 1 || version == 187)
 	memory. Then we read the vertex defs section
 	before parsing the mesh data block correctly
 	using the mesh info structs to find each part
+	*/
+
+	/*
+	struct MeshInstance
+	{
+		int unk;
+		MeshHeader meshHeader(version);
+		VertexDefs vertDefs;
+	} meshes[geometryHeader.Unk3] <optimize=false>;
 	*/
 
 	int unk;
