@@ -360,10 +360,18 @@ class PCModel00PackedReader(object):
 		# TODO: Maybe sort info by data start?
 
 		mesh_data_list = []
+
+		mesh_count_prev = 0
 		for index in range(mesh_info_count):
 			info = mesh_info[index]
 
 			length = info.mesh_data_count
+
+			if mesh_count_prev < info.mesh_data_start:
+				length += info.mesh_data_start - mesh_count_prev
+
+			mesh_count_prev = info.mesh_data_start + info.mesh_data_count
+
 			for _ in range( length ):
 				data = self.MeshData()
 				mesh_data_list.append( data.read(self, f, vertex_formats[info.vertex_format_index]) )
