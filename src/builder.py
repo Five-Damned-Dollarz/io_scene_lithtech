@@ -387,7 +387,7 @@ class ModelBuilder(object):
 
                         time = keyframe.time * get_framerate()
                         subframe_time = time - floor(time)
-                        bpy.context.scene.frame_set(time, subframe = subframe_time)
+                        bpy.context.scene.frame_set(int(time), subframe = subframe_time)
 
                         evaluated_object = mesh_object.evaluated_get(dependency_graph)
                         vert_mesh = evaluated_object.to_mesh()
