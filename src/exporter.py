@@ -6,6 +6,8 @@ from .writer_abc_pc import ABCModelWriter
 from .writer_abc_v6_pc import ABCV6ModelWriter
 from .writer_lta_pc import LTAModelWriter
 from .utils import ABCVersion, LTAVersion
+import bpy
+import math
 
 class ExportOperatorABC(Operator, ExportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
@@ -56,14 +58,34 @@ class ExportOperatorABC(Operator, ExportHelper):
         if self.abc_version in [ABCVersion.ABC13.value]:
             raise Exception('Not implemented ({}).'.format(ABCVersion.get_text(self.abc_version)))
 
+        # Undo Blender coordinate transforms
         armature_object = context.scene.objects[self.armature]
+        armature_object.select_set(True)
+        armature_object.rotation_euler.x = math.radians(-90)
+        bpy.ops.object.transform_apply(rotation=True)
+        armature_object.scale.x = -1.0
+        if self.abc_version == ABCVersion.ABC6.value:
+            armature_object.scale.z = -1.0
+        bpy.ops.object.transform_apply(scale=True)
+        armature_object.select_set(False)
+
         model = ModelBuilder().from_armature(armature_object)
 
         if self.abc_version == ABCVersion.ABC6.value:
             ABCV6ModelWriter().write(model, self.filepath, self.abc_version)
         else:
             ABCModelWriter().write(model, self.filepath, self.abc_version)
-
+        
+        # Redo Blender coordinate transforms
+        armature_object = context.scene.objects[self.armature]
+        armature_object.select_set(True)
+        armature_object.rotation_euler.x = math.radians(90)
+        armature_object.scale.x = -1.0
+        if self.abc_version == ABCVersion.ABC6.value:
+            armature_object.scale.z = -1.0
+        bpy.ops.object.transform_apply(rotation=True, scale=True)
+        armature_object.select_set(False)
+        
         return {'FINISHED'}
 
     def menu_func_export(self, context):

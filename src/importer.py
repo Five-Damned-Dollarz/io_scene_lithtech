@@ -435,7 +435,12 @@ def import_model(model, options):
     # This may not be the best place to do it, but it works for now!
     if model.version == 6 or model.flip_geom:
         armature_object.scale.z = -1.0
-
+    
+    # Bake the armature transforms
+    armature_object.select_set(True)
+    bpy.ops.object.transform_apply(rotation=True, scale=True)
+    armature_object.select_set(False)
+    
     return {'FINISHED'}
 
 
